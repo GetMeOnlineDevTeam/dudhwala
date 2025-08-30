@@ -197,7 +197,7 @@ class BookingController extends Controller
             // JS now must send "amount" in paise as an integer
             'amount' => 'required|integer|min:1',
         ]);
-
+ 
         try {
             $api = new Api(
                 config('services.razorpay.key'),
@@ -228,133 +228,122 @@ class BookingController extends Controller
     }
 
     public function completeBooking(Request $request)
-    {
-        $user = Auth::user();
+{
+    $user = Auth::user();
+    $rules = [
+        'venue_id'       => 'required|exists:venue_details,id',
+        'slot_ids'       => 'required|array|min:1',
+        'slot_ids.*'     => 'exists:venue_time_slots,id',
+        'booking_date'   => 'required|date|after:today',
+        'payment_method' => 'required|in:online,offline',
+        'community'      => 'required|in:dudhwala,non-dudhwala', // Validate the community selection
+    ];
 
-        $rules = [
-            'venue_id'       => 'required|exists:venue_details,id',
-            'slot_ids'       => 'required|array|min:1',
-            'slot_ids.*'     => 'exists:venue_time_slots,id',
-            'booking_date'   => 'required|date|after:today',
-            'payment_method' => 'required|in:online,offline',
-        ];
-
-        if (! $user->is_verified) {
-            $rules['document_type'] = 'required|string';
-            $rules['document_file'] = 'required|file|mimes:pdf,jpg,jpeg,png|max:2048';
-        }
-
-        $validated = $request->validate($rules);
-
-        // Prevent mixing full-venue/full-time with other slots
-        $slot       = VenueTimeSlot::whereIn('id', $validated['slot_ids'])->first();
-
-        DB::beginTransaction();
-        try {
-            // Store document if needed
-            if (! $user->is_verified && $request->hasFile('document_file')) {
-                $path = $request->file('document_file')->store('user_docs', 'public');
-                UserDocuments::create([
-                    'user_id'       => $user->id,
-                    'document_type' => $validated['document_type'],
-                    'document'      => $path,
-                ]);
-            }
-
-            $date  = Carbon::parse($validated['booking_date'])->toDateString();
-            $total = $slot->price + $slot -> deposit;
-
-            // Create one Booking per slot
-            $bookingRecord = Bookings::create([
-                'user_id'      => $user->id,
-                'venue_id'     => $validated['venue_id'],
-                'time_slot_id' => $slot->id,
-                'single_time'  => (! $slot->full_venue && ! $slot->full_time),
-                'full_venue'   => $slot->full_venue,
-                'full_time'    => $slot->full_time,
-                'booking_date' => $date,
-                'status'       => 'pending',
-                'payment_id'   => null,
-                'price'        => $slot->price,
-                'deposit'      => $slot->deposit
-            ]);
-
-            // Create the payment record
-            $payment = Payment::create([
-                'user_id' => $user->id,
-                'amount'  => $total,
-                'method'  => $validated['payment_method'],
-                'status'  => 'pending',
-                'paid_at' => $validated['payment_method'] === 'offline' ? now() : null,
-            ]);
-
-            $bookingRecord->payment_id = $payment->id;
-            $bookingRecord->save();
-
-            // If it’s an online flow and Razorpay returned IDs, mark as paid
-            if (
-                $validated['payment_method'] === 'online'
-                && $request->filled('razorpay_payment_id')
-                && $request->filled('razorpay_order_id')
-            ) {
-                $payment->update([
-                    'user_id'            => $user->id,
-                    'amount'             => $total,
-                    'method'             => 'online',
-                    'razorpay_payment_id' => $request->razorpay_payment_id,
-                    'razorpay_order_id'       => $request->razorpay_order_id,
-                    'offline_reference'  => null,
-                    'status'         => 'completed',
-                    'paid_at'        => now(),
-                ]);
-
-                Bookings::where('payment_id', $payment->id)
-                    ->update(['status' => 'approved']);
-            }
-
-            DB::commit();
-
-            $invoiceUrl = route('book.invoice', ['payment' => $payment->id]);
-
-            return redirect()
-                ->route('book.hall')
-                ->with('success', 'Booking successful! 🎉')
-                ->with('invoice_url', $invoiceUrl);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Booking Error: ' . $e->getMessage());
-            return back()
-                ->withErrors(['error' => 'An error occurred: ' . $e->getMessage()]);
-        }
+    // Additional validation for unverified users
+    if (! $user->is_verified) {
+        $rules['document_type'] = 'required|string';
+        $rules['document_file'] = 'required|file|mimes:pdf,jpg,jpeg,png|max:2048';
     }
 
-public function downloadInvoice($paymentId)
-{
-    $payment = Payment::with([
-        'user',
-        'bookings.timeSlot',        // each booking's time slot
-        'bookings.venue_details',   // venue for each booking
-    ])->findOrFail($paymentId);
+    $validated = $request->validate($rules);
 
-    // All bookings attached to this payment
-    $bookings = $payment->bookings;
+    // Fetch slot details
+    $slot = VenueTimeSlot::whereIn('id', $validated['slot_ids'])->first();
 
-    // Defensive defaults if older data has nulls
-    $rentTotal    = (float) $bookings->sum('price');
-    $depositTotal = (float) $bookings->sum('deposit'); // requires you saved deposit on each booking
-    $grandTotal   = $rentTotal + $depositTotal;
+    DB::beginTransaction();
+    try {
+        // Handle document upload if necessary
+        if (! $user->is_verified && $request->hasFile('document_file')) {
+            $path = $request->file('document_file')->store('user_docs', 'public');
+            UserDocuments::create([
+                'user_id' => $user->id,
+                'document_type' => $validated['document_type'],
+                'document' => $path,
+            ]);
+        }
 
-    // Nice invoice number like INV-20250829-00042
-    $invoiceNo = 'INV-' . now()->format('Ymd') . '-' . str_pad($payment->id, 5, '0', STR_PAD_LEFT);
+        $date  = Carbon::parse($validated['booking_date'])->toDateString();
+        $total = $slot->price + $slot->deposit;
 
-    // Optional: infer one booking date (all your rows share same date in this flow)
-    $bookingDate = optional($bookings->first())->booking_date;
+        // Calculate discount if community is Dudhwala
+        $discount = 0;
+        if ($validated['community'] === 'dudhwala') {
+            $discount = 0.10 * $total; // 10% discount for Dudhwala community
+        }
 
-    $data = compact('payment', 'bookings', 'rentTotal', 'depositTotal', 'grandTotal', 'invoiceNo', 'bookingDate');
+        // Apply discount to the total amount
+        $totalWithDiscount = $total - $discount;
 
-    $pdf = Pdf::loadView('invoice', $data)->setPaper('a4');
+        // Create booking record
+        $bookingRecord = Bookings::create([
+            'user_id'      => $user->id,
+            'venue_id'     => $validated['venue_id'],
+            'time_slot_id' => $slot->id,
+            'single_time'  => (! $slot->full_venue && ! $slot->full_time),
+            'full_venue'   => $slot->full_venue,
+            'full_time'    => $slot->full_time,
+            'booking_date' => $date,
+            'status'       => 'pending',
+            'payment_id'   => null,
+            'price'        => $slot->price,
+            'deposit_amount' => $slot->deposit,
+            'total_amount'  => $totalWithDiscount // Store the total with the discount applied
+        ]);
 
-    return $pdf->download("invoice-{$payment->id}.pdf");
+        // Create payment record
+        $payment = Payment::create([
+            'user_id' => $user->id,
+            'amount'  => $totalWithDiscount, // Payable after discount
+            'method'  => $validated['payment_method'],
+            'status'  => 'pending',
+            'paid_at' => $validated['payment_method'] === 'offline' ? now() : null,
+        ]);
 
+        $bookingRecord->payment_id = $payment->id;
+        $bookingRecord->save();
+
+        DB::commit();
+
+        return redirect()
+            ->route('book.hall')
+            ->with('success', 'Booking successful! 🎉')
+            ->with('invoice_url', route('book.invoice', ['payment' => $payment->id]));
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Booking Error: ' . $e->getMessage());
+        return back()->withErrors(['error' => 'An error occurred: ' . $e->getMessage()]);
+    }
 }
+
+
+    public function downloadInvoice($paymentId)
+    {
+        $payment = Payment::with([
+            'user',
+            'bookings.timeSlot',        // to read price/deposit from venue_time_slots
+            'bookings.venue_details',   // venue name
+        ])->findOrFail($paymentId);
+
+        $bookings = $payment->bookings;
+
+        // Totals from venue_time_slots (not from bookings columns)
+        $rentTotal = (float) $bookings->sum(function ($b) {
+            return (float) optional($b->timeSlot)->price;
+        });
+
+        $depositTotal = (float) $bookings->sum(function ($b) {
+            return (float) optional($b->timeSlot)->deposit; // column name is "deposit"
+        });
+
+        // Total paid is taken from payments table (per your instruction)
+        $totalPaid = (float) $payment->amount;
+
+        // Nice invoice number: INV-YYYYMMDD-00001
+        $invoiceNo = 'INV-' . $payment->created_at->format('Ymd') . '-' . str_pad($payment->id, 5, '0', STR_PAD_LEFT);
+
+        $data = compact('payment', 'bookings', 'rentTotal', 'depositTotal', 'totalPaid', 'invoiceNo');
+
+        $pdf = Pdf::loadView('invoice', $data)->setPaper('a4');
+        return $pdf->download("invoice-{$payment->id}.pdf");
+    }
 }

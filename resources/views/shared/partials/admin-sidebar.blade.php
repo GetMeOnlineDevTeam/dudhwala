@@ -4,9 +4,7 @@
     <div class="sidebar-header d-flex justify-content-between align-items-center px-3 pt-3 pb-2">
         <div class="logo-icon w-100 text-center">
             <a href="{{ route('admin.dashboard') }}">
-                <img
-                    src="{{ asset('storage/logo/logo.png') }}"
-                    alt="Logo"
+                <img src="{{ asset('storage/logo/logo.png') }}" alt="Logo"
                     style="max-width: 72px; max-height: 72px; width: auto; height: auto; display: inline-block;">
             </a>
         </div>
@@ -89,6 +87,12 @@
                     <div class="menu-title">Money Back</div>
                 </a>
             </li>
+            <li class="{{ request()->routeIs('admin.configurations.index') ? 'mm-active' : '' }}">
+                <a href="{{ route('admin.configurations.index') }}">
+                    <div class="parent-icon"><i class="material-icons-outlined">settings</i></div>
+                    <div class="menu-title">Configurations</div>
+                </a>
+            </li>
 
             <li class="{{ request()->routeIs('admin.policy.index') ? 'mm-active' : '' }}">
                 <a href="{{ route('admin.policy.index') }}">
@@ -100,6 +104,6 @@
         <!--end navigation-->
     </div>
 
-    
+
 </aside>
 <!--end sidebar-->

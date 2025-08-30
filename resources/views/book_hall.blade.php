@@ -110,14 +110,15 @@
             @csrf
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Community + static details -->
-                <div class="md:col-span-2 text-center">
-                    <label class="block text-sm font-semibold text-gray-800 mb-1">Select Community</label>
-                    <select class="inline-block w-1/2 border border-gray-300 rounded-md p-2 bg-gray-100" readonly>
-                        <option>Dudhwala</option>
-                        <option>Non Dudhwala</option>
-                    </select>
-                </div>
+                <!-- Community Selection -->
+<div class="md:col-span-2 text-center">
+    <label class="block text-sm font-semibold text-gray-800 mb-1">Select Community</label>
+    <select class="inline-block w-1/2 border border-gray-300 rounded-md p-2 bg-gray-100" name="community" id="community" x-model="community">
+        <option value="non-dudhwala">Non Dudhwala</option>
+        <option value="dudhwala">Dudhwala</option>
+    </select>
+</div>
+
                 <div>
                     <label class="block text-sm font-semibold text-gray-800 mb-1">Name</label>
                     <input type="text" readonly value="{{ auth()->user()->first_name }}"
@@ -249,64 +250,76 @@
             </div>
 
             <!-- Selected summary (inline) -->
-            <div x-show="selectedSlots.length" class="text-center text-sm text-gray-600 mt-4">
-                <template x-for="slot in selectedSlots" :key="slot.slot_id">
-                    <div>
-                        Selected: <span class="font-medium" x-text="slot.name"></span> (<span
-                            x-text="slot.timings"></span>)
-                        — <span class="muted">Rent ₹</span><span x-text="money(slot.price)"></span>,
-                        <span class="muted">Deposit ₹</span><span x-text="money(slot.deposit)"></span>
-                    </div>
-                </template>
-            </div>
+<div x-show="selectedSlots.length" class="text-center text-sm text-gray-600 mt-4">
+    <template x-for="slot in selectedSlots" :key="slot.slot_id">
+        <div>
+            Selected: <span class="font-medium" x-text="slot.name"></span> (<span
+                x-text="slot.timings"></span>)
+            — <span class="muted">Rent ₹</span><span x-text="money(slot.price)"></span>,
+            <span class="muted">Deposit ₹</span><span x-text="money(slot.deposit)"></span>
+        </div>
+    </template>
+</div>
 
-            <!-- Hidden inputs -->
-            <input type="hidden" name="venue_id" :value="selectedVenueId">
-            <input type="hidden" name="booking_date" :value="selectedDate">
-            <input type="hidden" name="payment_method" :value="selectedPaymentOption">
-            <input type="hidden" name="price" :value="grandPayable"> <!-- total rent + deposit -->
-            <input type="hidden" name="rent_total" :value="totalRent">
-            <input type="hidden" name="deposit_total" :value="totalDeposit">
-            <template x-for="slot in selectedSlots" :key="slot.slot_id">
-                <input type="hidden" name="slot_ids[]" :value="slot.slot_id">
-            </template>
+<!-- Hidden inputs -->
+<input type="hidden" name="venue_id" :value="selectedVenueId">
+<input type="hidden" name="booking_date" :value="selectedDate">
+<input type="hidden" name="payment_method" :value="selectedPaymentOption">
+<input type="hidden" name="price" :value="grandPayable"> <!-- total rent + deposit -->
+<input type="hidden" name="rent_total" :value="totalRent">
+<input type="hidden" name="deposit_total" :value="totalDeposit">
+<template x-for="slot in selectedSlots" :key="slot.slot_id">
+    <input type="hidden" name="slot_ids[]" :value="slot.slot_id">
+</template>
 
-            <!-- Terms + CTA -->
-            <div>
-                <label class="inline-flex items-start space-x-2">
-                    <input type="checkbox" x-model="termsAccepted" name="terms_accepted"
-                        class="border border-gray-300 rounded mt-1">
-                    <span class="text-sm text-gray-700">
-                        I accept the terms & conditions, including the refundable deposit policy.
-                    </span>
-                </label>
-                <template x-if="errors.termsAccepted">
-                    <p class="text-xs text-red-600 mt-1" x-text="errors.termsAccepted"></p>
-                </template>
-            </div>
-            <div class="pt-3 text-sm text-gray-600" x-show="selectedSlots.length">
-                <div class="flex justify-between">
-                    <span>Rent</span> <span class="font-medium">₹ <span x-text="money(totalRent)"></span></span>
-                </div>
-                <div class="flex justify-between">
-                    <span>Refundable Deposit</span> <span class="font-medium">₹ <span
-                            x-text="money(totalDeposit)"></span></span>
-                </div>
-                <div class="divider"></div>
-                <div class="flex justify-between text-gray-900">
-                    <span class="font-semibold">Payable Now</span>
-                    <span class="font-bold text-lg">₹ <span x-text="money(grandPayable)"></span></span>
-                </div>
-            </div>
+<!-- Terms + CTA -->
+<div>
+    <label class="inline-flex items-start space-x-2">
+        <input type="checkbox" x-model="termsAccepted" name="terms_accepted"
+            class="border border-gray-300 rounded mt-1">
+        <span class="text-sm text-gray-700">
+            I accept the terms & conditions, including the refundable deposit policy.
+        </span>
+    </label>
+    <template x-if="errors.termsAccepted">
+        <p class="text-xs text-red-600 mt-1" x-text="errors.termsAccepted"></p>
+    </template>
+</div>
 
-            <div class="pt-6">
-                <button type="submit" :disabled="selectedSlots.length === 0 || isLoading"
-                    :class="selectedSlots.length === 0 ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#116631] hover:bg-green-900'"
-                    class="w-full text-white py-3 rounded-md text-sm font-semibold transition flex justify-center items-center">
-                    <span x-show="!isLoading">Proceed to Summary</span>
-                    <span x-show="isLoading" class="spinner"></span>
-                </button>
-            </div>
+<!-- Rent, Refundable Deposit, Discount, and Total Payable Summary -->
+<div class="pt-3 text-sm text-gray-600" x-show="selectedSlots.length">
+    <div class="flex justify-between">
+        <span>Rent</span> <span class="font-medium">₹ <span x-text="money(totalRent)"></span></span>
+    </div>
+    <div class="flex justify-between">
+        <span>Refundable Deposit</span> <span class="font-medium">₹ <span
+                x-text="money(totalDeposit)"></span></span>
+    </div>
+
+    <!-- Applied Discount (only show if Dudhwala community is selected) -->
+    <template x-if="community === 'dudhwala'">
+        <div class="flex justify-between">
+            <span>Applied Discount</span>
+            <span class="font-medium text-green-600">₹ <span x-text="money(discountAmount)"></span></span>
+        </div>
+    </template>
+
+    <div class="divider"></div>
+
+    <div class="flex justify-between text-gray-900">
+        <span class="font-semibold">Payable Now</span>
+        <span class="font-bold text-lg">₹ <span x-text="money(grandPayable - discountAmount)"></span></span>
+    </div>
+</div>
+
+<div class="pt-6">
+    <button type="submit" :disabled="selectedSlots.length === 0 || isLoading"
+        :class="selectedSlots.length === 0 ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#116631] hover:bg-green-900'"
+        class="w-full text-white py-3 rounded-md text-sm font-semibold transition flex justify-center items-center">
+        <span x-show="!isLoading">Proceed to Summary</span>
+        <span x-show="isLoading" class="spinner"></span>
+    </button>
+</div>
         </form>
 
         <!-- STEP 2: Booking Summary -->
@@ -437,7 +450,15 @@
                 paymentError: '',
                 invoiceUrl: invoiceUrl || '',
                 isLoading: false,
+                community: 'non-dudhwala', // Default community
+        discountAmount: 0,  // Initialize discount
+ get appliedDiscount() {
+            return this.community === 'dudhwala' ? 1000 : 0;  // Set the discount value (e.g., ₹1000)
+        },
 
+        get grandPayable() {
+            return this.totalRent + this.totalDeposit - this.appliedDiscount;
+        },
                 /* totals */
                 get totalRent() {
                     return this.selectedSlots.reduce((s, x) => s + Number(x.price || 0), 0);

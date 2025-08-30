@@ -126,7 +126,7 @@ class OtpRegisterController extends Controller
         Cache::forget("reg:{$phone}");
         RateLimiter::clear("reg-otp:{$phone}:".$request->ip()); // optional reset
 
-        Auth::login($user);
+        Auth::guard('web')->login($user);
         session()->forget(['first_name','last_name','contact_number']);
 
         return redirect()->intended(route('home'));

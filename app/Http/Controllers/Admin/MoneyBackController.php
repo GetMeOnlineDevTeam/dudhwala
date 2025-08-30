@@ -15,11 +15,11 @@ class MoneyBackController extends Controller
      */
     public function index(Request $request)
     {
-        $types = [MoneyBack::TYPE_REFUND, MoneyBack::TYPE_RETURN];
+        $types = [MoneyBack::TYPE_REFUND, MoneyBack::TAKE_MONEY];
 
         $query = MoneyBack::with([
-            'user:id,first_name,last_name',          // so we can show names even if booking is deleted
-            'booking.user:id,first_name,last_name',  // when booking still exists (return case)
+            'user:id,first_name,last_name',          // keep name even if booking deleted
+            'booking.user:id,first_name,last_name',
             'booking.venue:id,name',
             'booking.timeSlot:id,name',
         ])->latest();
@@ -35,11 +35,11 @@ class MoneyBackController extends Controller
                 $qq->where('id', $q)
                    ->orWhere('amount', 'like', "%{$q}%")
                    ->orWhere('reference', 'like', "%{$q}%")
-                   ->orWhereHas('user', function ($qu) use ($q) {            // search saved user (always present)
+                   ->orWhereHas('user', function ($qu) use ($q) {
                        $qu->where('first_name', 'like', "%{$q}%")
                           ->orWhere('last_name', 'like', "%{$q}%");
                    })
-                   ->orWhereHas('booking', function ($qb) use ($q) {         // search booking + nested
+                   ->orWhereHas('booking', function ($qb) use ($q) {
                        $qb->where('id', $q)
                           ->orWhereHas('user', function ($qu) use ($q) {
                               $qu->where('first_name', 'like', "%{$q}%")
@@ -70,37 +70,47 @@ class MoneyBackController extends Controller
             'types'      => $types,
         ]);
     }
-
+ 
     /**
      * GET /admin/money-back/create
      * Optional prefill with ?booking=ID
      */
     public function create(Request $request)
-    {
-        $types            = [MoneyBack::TYPE_REFUND, MoneyBack::TYPE_RETURN];
-        $booking          = null;
-        $paidAmount       = 0.0;
-        $alreadyReturned  = 0.0;
-        $maxAmount        = null;
+{
+    $types = [MoneyBack::TYPE_REFUND, MoneyBack::TAKE_MONEY];
 
-        if ($bookingId = $request->query('booking')) {
-            $booking = Bookings::with(['user', 'venue', 'timeSlot', 'payment'])->find($bookingId);
+    $booking         = null;
+    $paidAmount      = 0.0;  // info only
+    $depositAmount   = 0.0;
+    $itemsTotal      = 0.0;
+    $alreadyReturned = 0.0;
+    $maxAmount       = 0.0;  // cap we will show in the UI
 
-            if ($booking) {
-                $paidAmount      = (float) optional($booking->payment)->amount ?? 0.0;
-                $alreadyReturned = (float) MoneyBack::where('booking_id', $booking->id)->sum('amount');
-                $maxAmount       = max($paidAmount - $alreadyReturned, 0.0);
-            }
+    if ($bookingId = $request->query('booking')) {
+        $booking = Bookings::with(['user','venue','timeSlot','payment'])
+            ->withSum('items as items_total', 'total')
+            ->find($bookingId);
+
+        if ($booking) {
+            $paidAmount      = (float) ($booking->payment?->amount ?? 0.0);
+            $depositAmount   = (float) ($booking->deposit_amount ?? 0.0);
+
+            // prefer cached items_amount if you keep it, else items_total
+            $itemsTotal = $booking->items_amount !== null
+                ? (float) $booking->items_amount
+                : (float) (($booking->items_total) ?? 0.0);
+
+            $alreadyReturned = (float) MoneyBack::where('booking_id', $booking->id)->where('status','success')->sum('amount');
+
+            // ✅ CAP: only deposit is refundable, minus items and any prior payouts
+            $maxAmount = max($depositAmount - $itemsTotal - $alreadyReturned, 0.0);
         }
-
-        return view('admin.MoneyBack.create', [
-            'types'            => $types,
-            'booking'          => $booking,
-            'paidAmount'       => $paidAmount,
-            'alreadyReturned'  => $alreadyReturned,
-            'maxAmount'        => $maxAmount,
-        ]);
     }
+
+    return view('admin.MoneyBack.create', compact(
+        'types', 'booking', 'paidAmount', 'depositAmount', 'itemsTotal', 'alreadyReturned', 'maxAmount'
+    ));
+}
 
     /**
      * POST /admin/money-back
@@ -108,17 +118,22 @@ class MoneyBackController extends Controller
      */
     public function store(Request $request)
     {
-        $booking = Bookings::with('payment')->findOrFail($request->input('booking_id'));
+        $booking = Bookings::with(['payment'])->findOrFail($request->input('booking_id'));
 
-        // Cap = paid - already returned/refunded
-        $paidAmount      = (float) optional($booking->payment)->amount ?? 0.0;
-        $alreadyReturned = (float) MoneyBack::where('booking_id', $booking->id)->sum('amount');
-        $maxAmount       = max($paidAmount - $alreadyReturned, 0.0);
+        // Compute the same CAP on the server (source of truth)
+        $depositAmount   = (float) ($booking->deposit_amount ?? 0.0);
+        // prefer cached items_amount if present, else sum live
+        $itemsTotal      = (float) ($booking->items_amount ?? $booking->items()->sum('total'));
+        $alreadyReturned = (float) MoneyBack::where('booking_id', $booking->id)
+        ->where('status','success')
+        ->sum('amount');
+
+        $cap = max($depositAmount - $itemsTotal - $alreadyReturned, 0.0);
 
         $validated = $request->validate([
             'booking_id' => ['required', 'exists:bookings,id'],
-            'type'       => ['required', 'in:' . MoneyBack::TYPE_REFUND . ',' . MoneyBack::TYPE_RETURN],
-            'amount'     => ['required', 'numeric', 'min:0.01', 'max:' . $maxAmount],
+            'type'       => ['required', 'in:' . MoneyBack::TYPE_REFUND . ',' . MoneyBack::TAKE_MONEY],
+            'amount'     => ['required', 'numeric', 'min:0.01', 'max:' . $cap],
             'reference'  => ['nullable', 'string', 'max:190'],
             'note'       => ['nullable', 'string', 'max:2000'],
         ], [
@@ -126,29 +141,38 @@ class MoneyBackController extends Controller
         ]);
 
         DB::transaction(function () use ($validated, $booking) {
-            // 1) Always create the money_back row (persist user_id so name is visible even after refund deletion)
-            $moneyBack = MoneyBack::create([
+            // 1) Create money_back row (persist user_id so name remains visible after refund deletion)
+            MoneyBack::create([
                 'user_id'      => $booking->user_id,
-                'booking_id'   => $booking->id,          // may be set to NULL by FK on delete (nullOnDelete)
+                'booking_id'   => $booking->id, // FK should be nullOnDelete so history stays
                 'type'         => $validated['type'],
                 'amount'       => $validated['amount'],
                 'reference'    => $validated['reference'] ?? null,
                 'note'         => $validated['note'] ?? null,
+                'status'         => 'pending',
                 'processed_at' => now(),
             ]);
-
-            // 2) If refund => hard delete the booking
-            if ($validated['type'] === MoneyBack::TYPE_REFUND) {
-                $booking->delete(); // ON DELETE SET NULL keeps the money_back row, nulling its booking_id
-            }
         });
 
         return redirect()
             ->route('admin.money-back.index')
             ->with('success',
                 $validated['type'] === MoneyBack::TYPE_REFUND
-                    ? 'Refund recorded and booking deleted.'
-                    : 'Return (cashback) recorded successfully.'
+                    ? 'Refund recorded successfully.'
+                    : 'Take back recorded successfully.'
             );
     }
+    public function updateStatus(Request $request, $id)
+{
+    $validated = $request->validate([
+        'status' => ['required', 'in:success,pending,processing'],
+    ]);
+
+    $moneyBack = MoneyBack::findOrFail($id);
+    $moneyBack->status = $validated['status'];
+    $moneyBack->save();
+
+    return back()->with('success', 'Status updated successfully.');
+}
+
 }

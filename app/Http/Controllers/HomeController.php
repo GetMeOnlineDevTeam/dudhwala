@@ -9,6 +9,7 @@ use App\Models\VenueDetail;
 use App\Models\VenueImage;
 use App\Models\VenueAddress;
 use App\Models\CommunityMembers;
+use App\Models\Configuration;
 use App\Models\MemberContact;
 use App\Models\Policies;
 use Illuminate\Support\Str;
@@ -105,8 +106,9 @@ class HomeController extends Controller
         $user = Auth::user();
         $venues = VenueDetail::all();
         $slots = VenueTimeSlot::all(); // This is from your model
+         $dudhwalaDiscount = Configuration::where('key', 'dudhwala_discount')->first()->value ?? 0;
         // dd($slots);
-        return view('book_hall', compact('user', 'venues', 'slots'));
+        return view('book_hall', compact('user', 'venues', 'slots', 'dudhwalaDiscount'));
     }
 
     public function policies()

@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-
+use Illuminate\Database\Eloquent\Relations\HasMany;
 class Bookings extends Model
 {
     use HasFactory;
@@ -13,7 +13,7 @@ class Bookings extends Model
      * The attributes that are mass assignable.
      */
     protected $table = 'bookings';
-
+protected $primaryKey = 'id';
     protected $fillable = [
         'user_id',
         'venue_id',
@@ -24,6 +24,8 @@ class Bookings extends Model
         'booking_date',
         'status',
         'payment_id',
+        'deposit_amount',
+        'items_amount'
     ];
 
     /**
@@ -34,6 +36,11 @@ class Bookings extends Model
         'booking_date' => 'date', // or 'date:Y-m-d'
     ];
 
+    public function items(): HasMany
+    {
+        // FK on booking_items = booking_id ; local key on bookings = id
+        return $this->hasMany(BookingItem::class, 'booking_id', 'id');
+    }
     /**
      * A Booking belongs to a User.
      */

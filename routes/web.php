@@ -25,6 +25,8 @@ use App\Http\Controllers\Admin\CommunityMomentsController;
 use App\Http\Controllers\Admin\AdminContactRequestController;
 use App\Http\Controllers\Admin\MoneyBackController;
 use App\Http\Controllers\Admin\PolicyController;
+use App\Http\Controllers\Admin\BookingItemController;
+use App\Http\Controllers\Admin\ConfigurationController;
 
 
 
@@ -51,7 +53,7 @@ Route::post('/razorpay/success', [RazorpayController::class, 'paymentSuccess']);
 
 
 // Authentication Routes
-Route::middleware('auth')->group(function () {
+Route::middleware('auth:web')->group(function () {
     // Profile Routes
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::post('/profile/phone/otp/send', [ProfileController::class, 'sendPhoneOtp'])
@@ -71,6 +73,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
 
     Route::middleware(['auth:admin'])->group(function () {
+
+        Route::get('/configurations', [ConfigurationController::class, 'index'])->name('configurations.index');
+Route::put('/configurations/update', [ConfigurationController::class, 'update'])->name('configurations.update');
+
         Route::get('/dashboard', [DashboardController::class, 'dashboard'])->name('dashboard');
 
         Route::get('/users', [AdminUserController::class, 'users'])->name('users');
@@ -82,7 +88,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/bookings', [AdminBookingsController::class, 'bookings'])->name('bookings');
         Route::delete('/bookings/{booking}', [AdminBookingsController::class, 'destroy'])->name('bookings.destroy');
         Route::get('bookings/export', [AdminBookingsController::class, 'export'])->name('bookings.export');
+        Route::prefix('bookings/{booking}/items')->name('bookings.items.')->group(function () {
+            Route::get('/', [BookingItemController::class, 'index'])->name('index');
 
+            Route::post('/bulk-upsert', [BookingItemController::class, 'bulkUpsert'])->name('bulk-upsert');
+
+            Route::delete('/{item}', [BookingItemController::class, 'destroy'])->name('destroy');
+        });
         Route::get('/venues', [VenueDetailsController::class, 'venues'])->name('venues');
         Route::get('/venues/create', [VenueDetailsController::class, 'create'])->name('venues.create');
         Route::post('/venues', [VenueDetailsController::class, 'store'])->name('venues.store');
@@ -123,6 +135,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/money-back', [MoneyBackController::class, 'index'])->name('money-back.index');
         Route::get('/money-back/create', [MoneyBackController::class, 'create'])->name('money-back.create');
         Route::post('/money-back', [MoneyBackController::class, 'store'])->name('money-back.store');
+        Route::patch('/money-back/{id}/update-status', [MoneyBackController::class, 'updateStatus'])->name('money-back.update-status');
 
 
         // Contact Requests Routes

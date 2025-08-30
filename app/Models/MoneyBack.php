@@ -11,8 +11,8 @@ class MoneyBack extends Model
 
     protected $table = 'money_back';
 
-    public const TYPE_REFUND = 'refund';
-    public const TYPE_RETURN = 'return';
+    public const TYPE_REFUND = 'Pay Back';
+    public const TAKE_MONEY = 'Take Money';
 
     protected $fillable = [
         'user_id',      // <-- added
@@ -22,6 +22,7 @@ class MoneyBack extends Model
         'reference',
         'note',
         'processed_at',
+        'status'
     ];
 
     protected $casts = [
@@ -58,7 +59,7 @@ class MoneyBack extends Model
 
     public function isReturn(): bool
     {
-        return $this->type === self::TYPE_RETURN;
+        return $this->type === self::TAKE_MONEY;
     }
 
     public function scopeRefund($query)
@@ -68,6 +69,6 @@ class MoneyBack extends Model
 
     public function scopeReturn($query)
     {
-        return $query->where('type', self::TYPE_RETURN);
+        return $query->where('type', self::TAKE_MONEY);
     }
 }
