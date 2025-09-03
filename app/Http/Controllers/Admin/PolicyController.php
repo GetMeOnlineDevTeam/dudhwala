@@ -6,8 +6,24 @@ use App\Http\Controllers\Controller;
 use App\Models\Policies;
 use Illuminate\Http\Request;
 
-class PolicyController extends Controller
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
+
+class PolicyController extends Controller implements HasMiddleware
 {
+public static function middleware(): array
+{
+    return [
+        new Middleware('auth:admin'),
+        new Middleware('role:admin,superadmin'),
+        (new Middleware('can:policy.view'))->only('index','show'),
+        (new Middleware('can:policy.edit'))->only('edit'),
+        (new Middleware('can:policy.update'))->only('update'),
+    ];
+}
+
+
+
 
     public function index(Request $request)
     {

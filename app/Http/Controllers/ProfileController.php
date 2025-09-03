@@ -23,7 +23,7 @@ class ProfileController extends Controller
 
     /**
      * Profile page.
-     */
+     */ 
     public function edit(Request $request): View
     {
         $bookings = Bookings::with(['payment', 'venue', 'timeSlot'])

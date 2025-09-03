@@ -111,10 +111,11 @@
                                     value="{{ $configuration->id }}">
                             </div>
                         @endforeach
-
+@can('configurations.update')
                         <div class="mt-3">
                             <button type="submit" class="btn btn-success">Update Configurations</button>
                         </div>
+                        @endcan
                     </form>
 
                 </div>

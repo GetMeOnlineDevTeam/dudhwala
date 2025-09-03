@@ -41,7 +41,7 @@
                                     <span
                                         class="lable-table bg-warning-subtle text-warning rounded border border-warning-subtle font-text2 fw-bold">Pending<i
                                             class="bi bi-info-circle ms-2"></i></span>
-                                    @elseif ($item->status === 'approved')
+                                    @elseif ($item->status === 'completed')
                                     <span
                                         class="lable-table bg-success-subtle text-success rounded border border-success-subtle font-text2 fw-bold">Confirmed<i
                                             class="bi bi-check2 ms-2"></i></span>

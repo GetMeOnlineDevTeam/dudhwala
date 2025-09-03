@@ -98,8 +98,8 @@
                     <th>ID</th>
                     <th>Full Name</th>
                     <th>Contact</th>
-                    <th>Document Verification</th>
-                    <th>Actions</th>
+                    {{-- <th>Document Verification</th> --}}
+                    {{-- <th>Actions</th> --}}
                 </tr>
             </thead>
             <tbody>
@@ -108,18 +108,18 @@
                     <td>{{ $user->id }}</td>
                     <td>{{ $user->first_name }} {{ $user->last_name }}</td>
                     <td>{{ $user->contact_number }}</td>
-                    <td>
+                    {{-- <td>
                         @if($user->is_verified == true)
                         <span class="badge bg-success">Verified</span>
                         @else
                         <span class="badge bg-danger">Not Verified</span>
                         @endif
-                    </td>
-                    <td>
+                    </td> --}}
+                    {{-- <td>
                         <a href="{{ route('admin.users.edit', $user->id) }}" >
                             <span class="material-icons-outlined">visibility</span>
                         </a>
-                    </td>
+                    </td> --}}
                 </tr>
                 @empty
                 <tr>

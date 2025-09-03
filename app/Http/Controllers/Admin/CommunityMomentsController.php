@@ -8,9 +8,23 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
-
-class CommunityMomentsController extends Controller
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
+class CommunityMomentsController extends Controller implements HasMiddleware
 {
+public static function middleware(): array
+{
+    return [
+        new Middleware('auth:admin'),
+        new Middleware('role:admin,superadmin'),
+        (new Middleware('can:community_moments.view'))->only('index'),
+        (new Middleware('can:community_moments.create'))->only('create','store'),
+        (new Middleware('can:community_moments.edit'))->only('edit','update'),
+        (new Middleware('can:community_moments.delete'))->only('destroy'),
+    ];
+}
+
+
     public function index(Request $request)
     {
         $q = CommunityMoment::query();

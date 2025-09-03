@@ -44,10 +44,11 @@
       @if($hasFilters)
         <a href="{{ route('admin.community.moments') }}" class="btn btn-outline-secondary">Clear</a>
       @endif
-
+@can('community_moments.create')
       <a href="{{ route('admin.community-moments.create') }}" class="btn btn-primary ms-auto">
         <i class="bi bi-plus-lg me-1"></i> Add Moment
       </a>
+      @endcan
     </form>
 
     {{-- Table --}}
@@ -76,9 +77,12 @@
                   </td>
                   <td>{{ $m->description }}</td>
                   <td>
+                    @can('community_moments.edit')
                     <a href="{{ route('admin.community-moments.edit', $m) }}" title="Edit">
                       <span class="material-icons-outlined">edit</span>
                     </a>
+                    @endcan
+                    @can('community_moments.delete')
                     <form action="{{ route('admin.community-moments.destroy', $m) }}"
                           method="POST" style="display:inline;"
                           onsubmit="return confirm('Delete this moment?');">
@@ -88,6 +92,7 @@
                         <span class="material-icons-outlined" style="color:#fe3f52;">delete</span>
                       </button>
                     </form>
+                    @endcan
                   </td>
                 </tr>
               @empty

@@ -7,7 +7,9 @@
     <div class="container py-3">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h4 class="mb-0">Community Members</h4>
+            @can('community_members.create')
             <a href="{{ route('admin.community-members.create') }}" class="btn btn-primary">Add Member</a>
+            @endcan
         </div>
 
 
@@ -43,7 +45,9 @@
                         </td>
                         <td>{{ $m->name }}</td>
                         <td>{{ $m->designation ?? '—' }}</td>
+                        
                         <td>
+                            @can('community_members.priority')
                             <form method="POST"
                                 action="{{ route('admin.community-members.priority', $m->id) }}"
                                 class="priority-form d-inline-flex align-items-center gap-2">
@@ -59,13 +63,16 @@
                                     Update
                                 </button>
                             </form>
+                            @endcan
                         </td>
 
                         <td>
+                            @can('community_members.edit')
                             <a href="{{ route('admin.community-members.edit', $m->id) }}" title="Edit">
                                 <span class="material-icons-outlined">edit</span>
                             </a>
-
+                            @endcan
+                            @can('community_members.delete')
                             <form action="{{ route('admin.community-members.destroy', $m->id) }}"
                                 method="POST"
                                 style="display:inline;"
@@ -76,6 +83,7 @@
                                     <span class="material-icons-outlined" style="color:red;">delete</span>
                                 </button>
                             </form>
+                            @endcan
                         </td>
 
                     </tr>

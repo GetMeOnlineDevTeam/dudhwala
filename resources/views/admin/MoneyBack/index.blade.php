@@ -95,8 +95,9 @@
                         <th>Type</th>
                         <th>Processed</th>
                         <th>Amount</th>
+                        @can('settlement.update_status')
                         <th>Status</th>
-
+                        @endcan
                     </tr>
                 </thead>
                 <tbody>
@@ -133,21 +134,34 @@
                             <td><span class="badge {{ $badgeCls }}">{{ ucfirst($type) }}</span></td>
                             <td class="text-muted">{{ $processed }}</td>
                             <td>₹{{ number_format($moneyBack->amount, 2) }}</td>
+                            @can('settlement.update_status')
                             <td>
-    <form action="{{ route('admin.money-back.update-status', $moneyBack->id) }}" method="POST">
-        @csrf
-        @method('PATCH') <!-- Use PATCH method to update existing record -->
-        
-        <div class="d-flex justify-content-start align-items-center">
-            <select name="status" class="form-select form-select-sm status-select" onchange="this.form.submit()">
-                <option value="success" @selected($moneyBack->status === 'success')>Success</option>
-                <option value="pending" @selected($moneyBack->status === 'pending')>Pending</option>
-                <option value="processing" @selected($moneyBack->status === 'processing')>Processing</option>
-            </select>
-        </div>
-    </form>
-</td>
+                                <form action="{{ route('admin.money-back.update-status', $moneyBack->id) }}"
+                                    method="POST">
+                                    @csrf
+                                    @method('PATCH')
 
+                                    @php
+                                        $current = strtolower(trim(old('status', $moneyBack->status ?? '')));
+                                    @endphp
+
+                                    <div class="d-flex justify-content-start align-items-center">
+                                        <select name="status" class="form-select form-select-sm status-select" required
+                                            onchange="this.form.submit()">
+                                            <option value="" disabled {{ $current === '' ? 'selected' : '' }}>Choose
+                                                status…</option>
+                                            <option value="paid" {{ $current === 'paid' ? 'selected' : '' }}>Paid
+                                            </option>
+                                            <option value="pending" {{ $current === 'pending' ? 'selected' : '' }}>Pending
+                                            </option>
+                                            <option value="cancelled" {{ $current === 'cancelled' ? 'selected' : '' }}>
+                                                Cancelled</option>
+                                        </select>
+                                    </div>
+                                </form>
+
+                            </td>
+                            @endcan
                         </tr>
                     @empty
                         <tr>

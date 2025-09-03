@@ -110,6 +110,7 @@
                     <td class="text-end">
                         <div class="d-inline-flex align-items-center gap-2">
                             {{-- View in modal --}}
+                            @can('contact_requests.view')
                             <button type="button"
                                 class="btn btn-outline-secondary btn-sm btn-view-request"
                                 data-request='@json($payload)'
@@ -118,6 +119,8 @@
                                 title="View">
                                 <span class="material-icons-outlined" style="vertical-align:middle">visibility</span>
                             </button>
+                            @endcan
+                            @can('contact_requests.delete')
 
                             {{-- Delete --}}
                             <form action="{{ route('admin.contact-requests.destroy', $row) }}" method="POST"
@@ -128,6 +131,7 @@
                                     <span class="material-icons-outlined" style="vertical-align:middle">delete</span>
                                 </button>
                             </form>
+                            @endcan
                         </div>
                     </td>
                 </tr>

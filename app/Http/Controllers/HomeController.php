@@ -107,7 +107,7 @@ class HomeController extends Controller
         $venues = VenueDetail::all();
         $slots = VenueTimeSlot::all(); // This is from your model
          $dudhwalaDiscount = Configuration::where('key', 'dudhwala_discount')->first()->value ?? 0;
-        // dd($slots);
+        // dd($dudhwalaDiscount);
         return view('book_hall', compact('user', 'venues', 'slots', 'dudhwalaDiscount'));
     }
 

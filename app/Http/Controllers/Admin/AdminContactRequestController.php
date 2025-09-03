@@ -7,8 +7,23 @@ use App\Models\ContactRequest;
 use Illuminate\Http\Request as HttpRequest;
 use Carbon\Carbon;
 
-class AdminContactRequestController extends Controller
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
+
+class AdminContactRequestController extends Controller implements HasMiddleware
 {
+public static function middleware(): array
+{
+    return [
+        new Middleware('auth:admin'),
+        new Middleware('role:admin,superadmin'),
+        (new Middleware('can:contact_requests.view'))->only('index'),
+        (new Middleware('can:contact_requests.show'))->only('show'),
+        (new Middleware('can:contact_requests.delete'))->only('destroy'),
+    ];
+}
+
+
     public function index(HttpRequest $request)
     {
         $query = ContactRequest::query();

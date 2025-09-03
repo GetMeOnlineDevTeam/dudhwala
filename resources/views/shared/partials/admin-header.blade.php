@@ -263,64 +263,43 @@
                   </div>
               </li>
 
-              <li class="nav-item dropdown">
-                  <a href="javascript:;" class="dropdown-toggle dropdown-toggle-nocaret" data-bs-toggle="dropdown">
-                      <img src="{{ asset('storage/logo/logo.png') }}" class="rounded-circle p-1 border" width="45" height="45">
-                  </a>
-                  <div class="dropdown-menu dropdown-user dropdown-menu-end shadow">
-                      <a class="dropdown-item  gap-2 py-2" href="javascript:;">
-                          <div class="text-center">
-                              <img src="{{ asset('storage/logo/logo.png') }}" class="rounded-circle p-1 shadow mb-3" width="90" height="90" alt="">
-                              <h5 class="user-name mb-0 fw-bold">Hello, Dudhwala Admin</h5>
-                          </div>
-                      </a>
-                      <hr class="dropdown-divider">
+              @php($u = auth('admin')->user())
+@if ($u)
+<li class="nav-item dropdown">
+  <a href="javascript:;" class="dropdown-toggle dropdown-toggle-nocaret" data-bs-toggle="dropdown">
+    <img
+      src="{{ $u->avatar_url ?? asset('storage/logo/logo.png') }}"
+      class="rounded-circle p-1 border"
+      width="45" height="45" alt="profile">
+  </a>
 
-                      <!-- Sidebar links inside dropdown -->
-                      <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="{{ route('admin.dashboard') }}">
-                          <i class="material-icons-outlined">dashboard</i>Dashboard
-                      </a>
-                      <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="{{ route('admin.users') }}">
-                          <i class="material-icons-outlined">people</i>Users
-                      </a>
-                      <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="{{ route('admin.venues') }}">
-                          <i class="material-icons-outlined">location_city</i>Venues
-                      </a>
-                      <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="{{ route('admin.bookings') }}">
-                          <i class="material-icons-outlined">book</i>Bookings
-                      </a>
-                      <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="{{ route('admin.schedule') }}">
-                          <i class="material-icons-outlined">event</i>Schedule
-                      </a>
-                      <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="{{ route('admin.banner.edit') }}">
-                          <i class="material-icons-outlined">image</i>Homepage Banner
-                      </a>
-                      <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="{{ route('admin.community-moments') }}">
-                          <i class="material-icons-outlined">photo_library</i>Community Moments
-                      </a>
-                      <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="{{ route('admin.community-members') }}">
-                          <i class="material-icons-outlined">group</i>Community Members
-                      </a>
-                      <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="{{ route('admin.contact-requests') }}">
-                          <i class="material-icons-outlined">mail</i>Contact Requests
-                      </a>
-                      <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="{{ route('admin.money-back.index') }}">
-                          <i class="material-icons-outlined">monetization_on</i>Money Back
-                      </a>
-                      <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="{{ route('admin.policy.index') }}">
-                          <i class="material-icons-outlined">policy</i>Policy Management
-                      </a>
-                      <hr class="dropdown-divider">
-                      <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="#" onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
-                          <i class="material-icons-outlined">power_settings_new</i>Logout
-                      </a>
-                      <form id="logout-form" action="{{ route('admin.logout') }}" method="POST" style="display: none;">
-                          @csrf
-                      </form>
-                  </div>
-              </li>
+  <div class="dropdown-menu dropdown-user dropdown-menu-end shadow">
+    <div class="text-center px-3 py-3">
+      <img
+        src="{{ $u->avatar_url ?? asset('storage/logo/logo.png') }}"
+        class="rounded-circle p-1 shadow mb-3"
+        width="90" height="90" alt="profile">
+      <h6 class="mb-1 fw-bold">
+        {{ trim(($u->first_name ?? '').' '.($u->last_name ?? '')) ?: ($u->name ?? $u->email) }}
+      </h6>
+      <span class="badge bg-primary">{{ ucfirst(strtolower($u->role ?? '')) }}</span>
+    </div>
+
+    <hr class="dropdown-divider">
+
+    <a class="dropdown-item d-flex align-items-center gap-2 py-2"
+       href="#"
+       onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
+      <i class="material-icons-outlined">power_settings_new</i>Logout
+    </a>
+    <form id="logout-form" action="{{ route('admin.logout') }}" method="POST" class="d-none">
+      @csrf
+    </form>
+  </div>
+</li>
+@endif
+
           </ul>
-
       </nav>
   </header>
   <!--end top header-->

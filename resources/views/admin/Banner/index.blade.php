@@ -9,7 +9,7 @@
 @section('content')
 <div class="main-content pt-0">
     <br>
-
+@can('banner.update')
     <!-- breadcrumb -->
     <div class="page-breadcrumb d-none d-sm-flex align-items-center mb-3">
         <div class="breadcrumb-title pe-3">
@@ -19,6 +19,7 @@
         </div>
     </div>
     <!-- end breadcrumb -->
+    @endcan
 
     <br>
 

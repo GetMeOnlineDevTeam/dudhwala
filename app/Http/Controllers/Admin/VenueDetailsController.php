@@ -11,8 +11,25 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
-class VenueDetailsController extends Controller
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
+
+class VenueDetailsController extends Controller implements HasMiddleware
 {
+public static function middleware(): array
+{
+    return [
+        new Middleware('auth:admin'),
+        new Middleware('role:admin,superadmin'),
+        (new Middleware('can:venues.view'))->only('venues'),
+        (new Middleware('can:venues.create'))->only('create','store'),
+        (new Middleware('can:venues.edit'))->only('edit','update'),
+        (new Middleware('can:venues.delete'))->only('destroy'),
+    ];
+}
+
+
+
     /**
      * List venues with optional search.
      */

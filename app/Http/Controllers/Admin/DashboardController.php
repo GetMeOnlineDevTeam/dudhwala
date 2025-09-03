@@ -9,50 +9,80 @@ use App\Models\Bookings;
 use App\Models\Payment;
 use App\Models\VenueTimeSlot;
 use App\Models\MoneyBack;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 
-class DashboardController extends Controller
+class DashboardController extends Controller implements HasMiddleware
 {
+public static function middleware(): array
+{
+    return [
+        new Middleware('auth:admin'),
+        new Middleware('role:admin,superadmin'),
+        (new Middleware('can:dashboard.view'))->only('dashboard'),
+    ];
+}
+
+
     public function dashboard()
-    {
-        // Users (unchanged)
-        $users = User::where('role', 'user')
-            ->orderBy('id', 'desc')
-            ->paginate(10, ['*'], 'users_page');
+{
+    // Users
+    $users = User::where('role', 'user')
+        ->orderBy('id', 'desc')
+        ->paginate(10, ['*'], 'users_page');
 
-        // Bookings (unchanged)
-        $bookings = Bookings::with(['user', 'venue', 'timeSlot'])
-            ->whereHas('user', fn($q) => $q->where('role', 'user'))
-            ->orderBy('id', 'desc')
-            ->paginate(5, ['*'], 'bookings_page');
+    // Bookings
+    $bookings = Bookings::with(['user', 'venue', 'timeSlot'])
+        ->whereHas('user', fn($q) => $q->where('role', 'user'))
+        ->orderBy('id', 'desc')
+        ->paginate(5, ['*'], 'bookings_page');
 
-        // Payments list (for table)
-        $payments = Payment::with('user')
-            ->whereHas('user', fn($q) => $q->where('role', 'user'))
-            ->orderBy('id', 'desc')
-            ->paginate(5, ['*'], 'payments_page');
 
-        // Totals (use sums, not paginated collections)
-        $paymentsTotal = Payment::whereHas('user', fn($q) => $q->where('role', 'user'))
-            // ->where('status', 'completed') // uncomment if you only count completed
-            ->sum('amount');
+    // ---- Totals ----
 
-        $moneyBacks = MoneyBack::with(['user', 'booking.venue', 'booking.timeSlot'])
-            ->latest()
-            ->paginate(5, ['*'], 'money_back_page');
+    // Only count real paid/completed payments toward revenue
+    $paymentsTotal = Payment::whereHas('user', fn($q) => $q->where('role', 'user'))
+        ->whereIn('status', ['paid', 'completed', 'success']) // adjust if your app uses different labels
+        ->sum('amount');
 
-        $moneyBackTotal = MoneyBack::whereHas('user', fn($q) => $q->where('role', 'user'))
-            ->sum('amount');
+    // MoneyBack adjustments:
+    // Include rows with NULL status (legacy) or processed-like statuses.
+    // Exclude 'pending'.
+    $processedStatus = ['processed', 'completed', 'success', 'paid'];
 
-        $netRevenue = $paymentsTotal - $moneyBackTotal;
+    $moneyBackAdd = MoneyBack::whereHas('user', fn($q) => $q->where('role', 'user'))
+        ->where('type', 'Take Money')
+        ->where(function ($q) use ($processedStatus) {
+            $q->whereNull('status')->orWhereIn('status', $processedStatus);
+        })
+        ->sum('amount');
 
-        return view('admin.index', compact(
-            'users',
-            'bookings',
-            'payments',
-            'paymentsTotal',
-            'moneyBacks',
-            'moneyBackTotal',
-            'netRevenue'
-        ));
-    }
+    $moneyBackSub = MoneyBack::whereHas('user', fn($q) => $q->where('role', 'user'))
+        ->where('type', 'Pay Back')
+        ->where(function ($q) use ($processedStatus) {
+            $q->whereNull('status')->orWhereIn('status', $processedStatus);
+        })
+        ->sum('amount');
+
+    // Net revenue = payments + (take money) - (pay back)
+    $netRevenue = (float) $paymentsTotal + (float) $moneyBackAdd - (float) $moneyBackSub;
+
+    // (Optional) list for MoneyBack table
+    $moneyBacks = MoneyBack::with(['user', 'booking.venue', 'booking.timeSlot'])
+        ->latest()
+        ->paginate(5, ['*'], 'money_back_page');
+
+    // If you still want a standalone "money back total" for the UI, you can present the breakdown:
+    $moneyBackTotal = (float) $moneyBackAdd - (float) $moneyBackSub;
+
+    return view('admin.index', compact(
+        'users',
+        'bookings',
+        'paymentsTotal',
+        'moneyBacks',
+        'moneyBackTotal',
+        'netRevenue'
+    ));
+}
+
 }

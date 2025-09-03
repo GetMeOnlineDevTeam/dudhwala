@@ -19,7 +19,7 @@
         // dd($user);
     @endphp
 
-    @if ($user && $user->hasRole('admin'))
+  @if ($user && in_array(strtolower($user->role ?? ''), ['admin','superadmin'], true))
         @include('shared.partials.admin-header')
         @include('shared.partials.admin-sidebar')
     @elseif ($user && $user->hasRole('host'))

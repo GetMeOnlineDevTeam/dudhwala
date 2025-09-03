@@ -10,8 +10,23 @@ use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\UsersExport;
 
 
-class AdminUserController extends Controller
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
+
+class AdminUserController extends Controller implements HasMiddleware
 {
+public static function middleware(): array
+{
+    return [
+        new Middleware('auth:admin'),
+        new Middleware('role:admin,superadmin'),
+        (new Middleware('can:users.view'))->only('users','ShowProfile','export','verify'),
+        // If you want a separate verify permission, add 'users.verify' and switch .only('verify') to it.
+    ];
+}
+
+    
+
     public function users(Request $request)
     {
         // Base query

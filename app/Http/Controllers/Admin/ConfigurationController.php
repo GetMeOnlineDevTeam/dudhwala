@@ -6,8 +6,22 @@ use App\Models\Configuration;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 
-class ConfigurationController extends Controller
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
+
+class ConfigurationController extends Controller implements HasMiddleware
 {
+public static function middleware(): array
+{
+    return [
+        new Middleware('auth:admin'),
+        new Middleware('role:admin,superadmin'),
+        (new Middleware('can:configurations.view'))->only('index'),
+        (new Middleware('can:configurations.update'))->only('update'),
+    ];
+}
+
+
     // Show the configuration form
     public function index()
     {

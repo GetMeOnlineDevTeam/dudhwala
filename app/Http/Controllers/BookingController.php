@@ -8,6 +8,8 @@ use App\Models\VenueTimeSlot;
 use App\Models\VenueFloor;
 use App\Models\UserDocuments;
 use App\Models\Payment;
+use App\Models\MoneyBack;
+use App\Models\BookingItem;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -17,6 +19,9 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\BookingsExport;
+use App\Models\Configuration;
+use Illuminate\Support\Str;
+use App\Services\InvoiceService;
 
 class BookingController extends Controller
 {
@@ -197,7 +202,7 @@ class BookingController extends Controller
             // JS now must send "amount" in paise as an integer
             'amount' => 'required|integer|min:1',
         ]);
- 
+
         try {
             $api = new Api(
                 config('services.razorpay.key'),
@@ -228,122 +233,194 @@ class BookingController extends Controller
     }
 
     public function completeBooking(Request $request)
-{
-    $user = Auth::user();
-    $rules = [
-        'venue_id'       => 'required|exists:venue_details,id',
-        'slot_ids'       => 'required|array|min:1',
-        'slot_ids.*'     => 'exists:venue_time_slots,id',
-        'booking_date'   => 'required|date|after:today',
-        'payment_method' => 'required|in:online,offline',
-        'community'      => 'required|in:dudhwala,non-dudhwala', // Validate the community selection
-    ];
+    {
+        $request->validate([
+            'community'      => 'required|in:dudhwala,non-dudhwala',
+            'venue_id'       => 'required|exists:venue_details,id',
+            'booking_date'   => 'required|date',
+            'slot_ids'       => 'required|array|min:1',
+            'slot_ids.0'     => 'exists:venue_time_slots,id',
+            'payment_method' => 'required|in:online,offline',
+        ]);
 
-    // Additional validation for unverified users
-    if (! $user->is_verified) {
-        $rules['document_type'] = 'required|string';
-        $rules['document_file'] = 'required|file|mimes:pdf,jpg,jpeg,png|max:2048';
-    }
+        $user = Auth::user();
+        $slot = VenueTimeSlot::findOrFail($request->slot_ids[0]);
 
-    $validated = $request->validate($rules);
+        // server-side totals
+        $rent    = (int) $slot->price;
+        $deposit = (int) ($slot->deposit ?? $slot->deposit_amount ?? 0);
 
-    // Fetch slot details
-    $slot = VenueTimeSlot::whereIn('id', $validated['slot_ids'])->first();
+        // discount rule from configurations (percent of RENT or flat ₹)
+        $rule = optional(Configuration::where('key', 'dudhwala_discount')->first())->value ?? 0;
 
-    DB::beginTransaction();
-    try {
-        // Handle document upload if necessary
-        if (! $user->is_verified && $request->hasFile('document_file')) {
-            $path = $request->file('document_file')->store('user_docs', 'public');
-            UserDocuments::create([
-                'user_id' => $user->id,
-                'document_type' => $validated['document_type'],
-                'document' => $path,
-            ]);
-        }
-
-        $date  = Carbon::parse($validated['booking_date'])->toDateString();
-        $total = $slot->price + $slot->deposit;
-
-        // Calculate discount if community is Dudhwala
         $discount = 0;
-        if ($validated['community'] === 'dudhwala') {
-            $discount = 0.10 * $total; // 10% discount for Dudhwala community
+        if ($request->community === 'dudhwala') {
+            $s = (string) $rule;
+            $n = (int) str_replace('%', '', $s);
+            $isPercent = \Illuminate\Support\Str::contains($s, '%') || $n <= 100;
+            $discount  = $isPercent ? (int) round($rent * $n / 100) : (int) $n;
+            $discount  = max(0, min($discount, $rent)); // clamp to rent
         }
 
-        // Apply discount to the total amount
-        $totalWithDiscount = $total - $discount;
+        $gross = $rent + $deposit;
+        $net   = max(0, $gross - $discount); // what the user pays now
 
-        // Create booking record
-        $bookingRecord = Bookings::create([
-            'user_id'      => $user->id,
-            'venue_id'     => $validated['venue_id'],
-            'time_slot_id' => $slot->id,
-            'single_time'  => (! $slot->full_venue && ! $slot->full_time),
-            'full_venue'   => $slot->full_venue,
-            'full_time'    => $slot->full_time,
-            'booking_date' => $date,
-            'status'       => 'pending',
-            'payment_id'   => null,
-            'price'        => $slot->price,
-            'deposit_amount' => $slot->deposit,
-            'total_amount'  => $totalWithDiscount // Store the total with the discount applied
-        ]);
+        DB::transaction(function () use ($request, $user, $net, $deposit, $slot, $discount, &$payment, &$booking) {
+            // 1) payment (amount = NET)
+            $payment = Payment::create([
+                'user_id'             => $user->id,
+                'amount'              => $net,
+                'method'              => $request->payment_method,
+                'razorpay_order_id'   => $request->input('razorpay_order_id'),
+                'razorpay_payment_id' => $request->input('razorpay_payment_id'),
+                'status'              => $request->payment_method === 'online' ? 'paid' : 'pending',
+                'paid_at'             => $request->payment_method === 'online' ? now() : null,
+            ]);
 
-        // Create payment record
-        $payment = Payment::create([
-            'user_id' => $user->id,
-            'amount'  => $totalWithDiscount, // Payable after discount
-            'method'  => $validated['payment_method'],
-            'status'  => 'pending',
-            'paid_at' => $validated['payment_method'] === 'offline' ? now() : null,
-        ]);
+            // 2) booking (store community + discount + deposit)
+            $booking = Bookings::create([
+                'user_id'        => $user->id,
+                'community'      => $request->community,
+                'venue_id'       => $request->venue_id,
+                'discount'       => $discount,
+                'deposit_amount' => $deposit,
+                'time_slot_id'   => $slot->id,
+                'booking_date'   => \Carbon\Carbon::parse($request->booking_date)->toDateString(),
+                'payment_id'     => $payment->id,
+                'status'         => $payment->status === 'paid' ? 'confirmed' : 'pending',
+                // keep settlement fields if you’re using them
+                'settlement_status' => 'pending',
+                'items_amount'      => 0,
+            ]);
 
-        $bookingRecord->payment_id = $payment->id;
-        $bookingRecord->save();
-
-        DB::commit();
+            // 3) MoneyBack placeholder for deposit (discount does NOT affect deposit)
+            // if ($deposit > 0) {
+            //     MoneyBack::updateOrCreate(
+            //         ['booking_id' => $booking->id], // one row per booking
+            //         [
+            //             'user_id'  => $user->id,
+            //             'type'     => 'Pay Back',      // will flip later if items exceed deposit
+            //             'amount'   => $deposit,        // initial refundable amount
+            //             'status'   => 'pending',
+            //             'note'     => 'Auto-created at booking time for refundable deposit.',
+            //         ]
+            //     );
+            // }
+        });
 
         return redirect()
-            ->route('book.hall')
-            ->with('success', 'Booking successful! 🎉')
-            ->with('invoice_url', route('book.invoice', ['payment' => $payment->id]));
-    } catch (\Exception $e) {
-        DB::rollBack();
-        Log::error('Booking Error: ' . $e->getMessage());
-        return back()->withErrors(['error' => 'An error occurred: ' . $e->getMessage()]);
+            ->route('profile.edit')
+            ->with('success', 'Booking created successfully.')
+            ->with('invoice_url', session('invoice_url'));
     }
+
+
+
+    // public function downloadInvoice($paymentId)
+    // {
+    //     // Load payment + all related bookings, each with slot/venue and items subtotal
+    //     $payment = Payment::with([
+    //         'user',
+    //         'bookings' => function ($q) {
+    //             $q->with(['timeSlot', 'venue_details'])
+    //                 ->withSum('items as items_total', 'total');
+    //         },
+    //     ])->findOrFail($paymentId);
+
+    //     $bookings = $payment->bookings;
+
+    //     // Source of truth for rent/deposit is the slot rows
+    //     $rentTotal = (float) $bookings->sum(fn($b) => (float) optional($b->timeSlot)->price);
+    //     $depositTotal = (float) $bookings->sum(fn($b) => (float) optional($b->timeSlot)->deposit);
+    //     $itemsSubtotal = (float) $bookings->sum('items_total'); // informational; not part of NET here
+
+    //     $grossTotal = $rentTotal + $depositTotal;
+
+    //     // Sum stored discounts; fallback to inference if missing
+    //     $discountTotal = (float) $bookings->sum('discount');
+    //     if ($discountTotal <= 0) {
+    //         $inferred = round(max(0, $grossTotal - (float) $payment->amount), 2);
+    //         if ($inferred > 0) {
+    //             $discountTotal = $inferred;
+    //         }
+    //     }
+
+    //     // Net charged for booking (rent+deposit-discount), and what was actually paid
+    //     $netDue   = round(max(0, $grossTotal - $discountTotal), 2);
+    //     $totalPaid = (float) $payment->amount;
+
+    //     // Community label (if all bookings share the same)
+    //     $communities = $bookings->pluck('community')->filter()->unique();
+    //     $communityLabel = $communities->count() === 1 ? ucfirst($communities->first()) : '—';
+
+    //     // MoneyBack (settlement) for the bookings on this invoice
+    //     $bookingIds = $bookings->pluck('id')->all();
+    //     $takePaid = $takePending = $paybackPaid = $paybackPending = 0.0;
+
+    //     if (!empty($bookingIds)) {
+    //         $rows = MoneyBack::select('type', 'status', DB::raw('SUM(amount) as sum'))
+    //             ->whereIn('booking_id', $bookingIds)
+    //             ->groupBy('type', 'status')
+    //             ->get();
+
+    //         foreach ($rows as $r) {
+    //             $type = strtolower(trim($r->type ?? ''));
+    //             $status = strtolower(trim($r->status ?? ''));
+    //             $sum = (float) $r->sum;
+
+    //             $isSuccess = in_array($status, ['success', 'completed', 'paid', 'approved', 'done'], true);
+
+    //             if ($type === 'take money') {
+    //                 $isSuccess ? $takePaid += $sum : $takePending += $sum;
+    //             } elseif ($type === 'pay back' || $type === 'refund') {
+    //                 $isSuccess ? $paybackPaid += $sum : $paybackPending += $sum;
+    //             }
+    //         }
+    //     }
+
+    //     // Legacy aliases so existing Blades keep working
+    //     $settlementAmount   = $takePaid;       // extra collected and PAID
+    //     $settlementPending  = $takePending;    // extra still due
+    //     $refundAmount       = $paybackPaid;    // refund already PAID
+    //     $refundPending      = $paybackPending; // refund still pending
+
+    //     // Pretty invoice no.
+    //     $invoiceNo = 'INV-' . $payment->created_at->format('Ymd') . '-' . str_pad($payment->id, 5, '0', STR_PAD_LEFT);
+
+    //     // Pack data for the Blade
+    //     $data = compact(
+    //         'payment',
+    //         'bookings',
+    //         'rentTotal',
+    //         'depositTotal',
+    //         'itemsSubtotal',
+    //         'grossTotal',
+    //         'discountTotal',
+    //         'netDue',
+    //         'totalPaid',
+    //         'invoiceNo',
+    //         'communityLabel',
+    //         // new names
+    //         'takePaid',
+    //         'takePending',
+    //         'paybackPaid',
+    //         'paybackPending',
+    //         // legacy aliases
+    //         'settlementAmount',
+    //         'settlementPending',
+    //         'refundAmount',
+    //         'refundPending'
+    //     );
+
+    //     $pdf = Pdf::loadView('invoice', $data)->setPaper('a4');
+    //     return $pdf->download("invoice-{$payment->id}.pdf");
+    // }
+    public function downloadInvoice($paymentId, InvoiceService $builder)
+{
+    $payment = \App\Models\Payment::findOrFail($paymentId);
+    $data = $builder->dataForPayment($payment);
+
+    $pdf = Pdf::loadView('invoice', $data)->setPaper('a4');
+    return $pdf->download("invoice-{$payment->id}.pdf");
 }
-
-
-    public function downloadInvoice($paymentId)
-    {
-        $payment = Payment::with([
-            'user',
-            'bookings.timeSlot',        // to read price/deposit from venue_time_slots
-            'bookings.venue_details',   // venue name
-        ])->findOrFail($paymentId);
-
-        $bookings = $payment->bookings;
-
-        // Totals from venue_time_slots (not from bookings columns)
-        $rentTotal = (float) $bookings->sum(function ($b) {
-            return (float) optional($b->timeSlot)->price;
-        });
-
-        $depositTotal = (float) $bookings->sum(function ($b) {
-            return (float) optional($b->timeSlot)->deposit; // column name is "deposit"
-        });
-
-        // Total paid is taken from payments table (per your instruction)
-        $totalPaid = (float) $payment->amount;
-
-        // Nice invoice number: INV-YYYYMMDD-00001
-        $invoiceNo = 'INV-' . $payment->created_at->format('Ymd') . '-' . str_pad($payment->id, 5, '0', STR_PAD_LEFT);
-
-        $data = compact('payment', 'bookings', 'rentTotal', 'depositTotal', 'totalPaid', 'invoiceNo');
-
-        $pdf = Pdf::loadView('invoice', $data)->setPaper('a4');
-        return $pdf->download("invoice-{$payment->id}.pdf");
-    }
 }

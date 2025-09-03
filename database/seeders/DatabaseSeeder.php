@@ -2,9 +2,25 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
+
+// Import models
+use App\Models\User;
+use App\Models\VenueDetail;
+use App\Models\VenueAddress;
+use App\Models\VenueImage;
+use App\Models\VenueFloor;
+use App\Models\VenueTimeSlot;
+use App\Models\Banner;
+use App\Models\CommunityMoment;
+use App\Models\CommunityMembers;  
+use App\Models\MemberContact;
+use App\Models\ContactRequest;
+use App\Models\Policies;          
+use App\Models\Configuration;
+use App\Models\Item;
+use App\Models\Permission;
 
 class DatabaseSeeder extends Seeder
 {
@@ -13,70 +29,47 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // // Add your admin user here
-        // User::updateOrCreate(
-        //     ['email' => 'admin@gmail.com'],
-        //     [
-        //         'name' => 'Admin',
-        //         'password' => Hash::make('admin@123'),
-        //         'role' => 'admin', // make sure your users table has a `role` column
-        //     ]
-        // );
+        // Disable foreign key checks
+        Schema::disableForeignKeyConstraints();
 
-        // $this->call([
-        //     RolesTableSeeder::class, // Ensure you have a UserSeeder to seed other users
-        // ]);
+        // Truncate your tables (no Spatie tables)
+        User::truncate();
+        VenueDetail::truncate();
+        VenueAddress::truncate();
+        VenueImage::truncate();
+        VenueFloor::truncate();
+        VenueTimeSlot::truncate();
+        Banner::truncate();
+        CommunityMoment::truncate();
+        CommunityMembers::truncate();
+        MemberContact::truncate();
+        ContactRequest::truncate();
+        Policies::truncate();
+        Configuration::truncate();
+        Item::truncate();
+        Permission::truncate();
 
+        // Re-enable foreign key checks
+        Schema::enableForeignKeyConstraints();
+
+        // Call seeders (removed RolesPermissionsSeeder)
         $this->call([
             AdminSeeder::class,
-        ]);
-
-        $this->call([
+             PermissionSeeder::class,
             VenueDetailSeeder::class,
-        ]);
-
-        $this->call([
             VenueAddressSeeder::class,
-        ]);
-
-        $this->call([
             VenueImageSeeder::class,
-        ]);
-
-        $this->call([
             VenueFloorSeeder::class,
-        ]);
-
-        $this->call([
             VenueTimeSlotSeeder::class,
-        ]);
-
-        $this->call([
             BannerSeeder::class,
-        ]);
-
-        $this->call([
             CommunityMomentSeeder::class,
-        ]);
-
-        $this->call([
             CommunityMemberSeeder::class,
-        ]);
-
-        $this->call([
             MemberContactSeeder::class,
-        ]);
-
-        $this->call([
             ContactRequestSeeder::class,
-        ]);
-
-        $this->call([
             PolicySeeder::class,
+            ConfigurationSeeder::class,
+            ItemSeeder::class,
+            // AvailabilitySeeder::class,
         ]);
-
-        // $this->call([
-        //     AvailabilitySeeder::class,
-        // ]);
     }
 }

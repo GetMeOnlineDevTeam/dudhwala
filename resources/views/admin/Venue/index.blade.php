@@ -77,8 +77,9 @@
                 Clear
             </a>
             @endif
-
+            @can('venues.create')
             <a href="{{ route('admin.venues.create') }}" class="btn btn-outline-secondary ms-auto">Create Venue</a>
+            @endcan
         </form>
     </div>
 
@@ -94,7 +95,7 @@
                     <th>Cover Image</th>
                     <th>Actions</th>
                 </tr>
-            </thead>
+            </thead> 
             <tbody>
                 @forelse($venues as $venue)
                 <tr>
@@ -114,9 +115,12 @@
                         @endforeach
                     </td>
                     <td>
+                        @can('venues.edit')
                         <a href="{{ route('admin.venues.edit', $venue->id) }}" title="Edit">
                             <span class="material-icons-outlined">edit</span>
                         </a>
+                        @endcan
+                        @can('venues.delete')
                         <form action="{{ route('admin.venues.destroy', $venue->id) }}" method="POST" style="display:inline;"
                             onsubmit="return confirm('Are you sure you want to delete this venue?');">
                             @csrf
@@ -125,6 +129,7 @@
                                 <span style="color: red;" class="material-icons-outlined">delete</span>
                             </button>
                         </form>
+                        @endcan
                     </td>
                 </tr>
                 @empty

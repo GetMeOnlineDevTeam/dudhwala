@@ -15,7 +15,7 @@
 
 <body>
 
-    @if (auth()->check() && auth()->user()->role === 'admin')
+@if (auth()->check() && in_array(strtolower(auth()->user()->role ?? ''), ['admin','superadmin'], true))
     @include('shared.partials.admin-header')
     @include('shared.partials.admin-sidebar')
     @endif

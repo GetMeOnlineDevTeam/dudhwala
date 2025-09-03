@@ -25,7 +25,9 @@ protected $primaryKey = 'id';
         'status',
         'payment_id',
         'deposit_amount',
-        'items_amount'
+        'items_amount',
+        'discount',
+        'community'
     ];
 
     /**

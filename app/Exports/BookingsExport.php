@@ -51,7 +51,7 @@ class BookingsExport implements FromArray, WithHeadings, WithStyles
             ->orderBy('id', 'desc')
             ->get()
             ->map(function ($b) {
-                $isAdminUser = ($b->user->role ?? null) === 'admin';
+                $isAdminUser = in_array(strtolower($b->user->role ?? ''), ['admin','superadmin'], true);
 
                 // Name
                 $name = $isAdminUser

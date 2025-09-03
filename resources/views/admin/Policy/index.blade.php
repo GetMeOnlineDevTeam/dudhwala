@@ -78,10 +78,11 @@
                 <p> {{ Str::limit($policy->text, 100) }}</p>
 
                 <div class="d-flex justify-content-between">
-
+@can('policy.edit')
                     <a href="{{ route('admin.policy.edit', $policy->id) }}" class="action-btn edit" title="Edit">
                         <span class="material-icons-outlined">edit</span>
                     </a>
+                    @endcan
 
                 </div>
             </div>

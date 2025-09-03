@@ -7,9 +7,22 @@ use Illuminate\Http\Request;
 use App\Models\Banner;
 use Illuminate\Support\Facades\Storage;
 
-class HomepageBannerController extends Controller
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
+
+class HomepageBannerController extends Controller implements HasMiddleware
 {
-    public function edit()
+public static function middleware(): array
+{
+    return [
+        new Middleware('auth:admin'),
+        new Middleware('role:admin,superadmin'),
+        (new Middleware('can:banner.edit'))->only('edit'),
+        (new Middleware('can:banner.update'))->only('update'),
+    ];
+}
+
+ public function edit()
     {
         $banner = Banner::first();  // Get the first and only banner
         return view('admin.banner.index', compact('banner'));

@@ -76,124 +76,166 @@
     </style>
 
     <div class="section-wrap" x-data="profilePage()">
-        {{-- BOOKINGS CARD --}}
-        <div class="card">
-            <div class="card-head">My Bookings</div>
-            <div class="card-body table-wrap">
-                <table class="table">
-                    <thead>
+    {{-- BOOKINGS CARD --}}
+    <div class="card">
+        <div class="card-head">My Bookings</div>
+        <div class="card-body table-wrap">
+            <table class="table">
+                <thead>
+                <tr>
+                    <th>Venue</th>
+                    <th>Date</th>
+                    <th>Time Slot</th>
+                    <th>Status</th>
+                    <th>Community</th>   {{-- NEW --}}
+                    <th>Discount</th>    {{-- NEW --}}
+                    <th>Amount</th>
+                    <th>Invoice</th>
+                </tr>
+                </thead>
+                <tbody>
+                @forelse($bookings as $b)
                     <tr>
-                        <th>Venue</th>
-                        <th>Date</th>
-                        <th>Time Slot</th>
-                        <th>Status</th>
-                        <th>Amount</th>
-                        <th>Invoice</th>
+                        <td>{{ $b->venue->name ?? '—' }}</td>
+                        <td>{{ \Carbon\Carbon::parse($b->booking_date)->format('d/m/Y') }}</td>
+                        <td>
+                            @php $ts = optional($b->timeSlot); @endphp
+                            {{ $ts->start_time ? \Carbon\Carbon::parse($ts->start_time)->format('h:i A') : '—' }}
+                            to
+                            {{ $ts->end_time ? \Carbon\Carbon::parse($ts->end_time)->format('h:i A') : '—' }}
+                        </td>
+                        <td>
+    @php
+        $s = strtolower($b->status ?? '');
+
+        switch ($s) {
+            case 'confirmed':
+            case 'approved':
+                $badgeClass = 'badge-success';
+                $label = 'Confirmed';
+                break;
+
+            case 'pending':
+                $badgeClass = 'badge-warn';
+                $label = 'Pending';
+                break;
+
+            case 'rejected':
+            case 'cancelled':
+                $badgeClass = 'badge-danger';
+                $label = ucfirst($s);
+                break;
+
+            default:
+                $badgeClass = 'badge-secondary';
+                $label = $b->status ? ucfirst($b->status) : ucfirst($b->status);
+                break;
+        }
+    @endphp
+
+    <span class="badge {{ $badgeClass }}">{{ $label }}</span>
+</td>
+
+
+                        {{-- NEW: Community --}}
+                        <td>{{ ucfirst($b->community ?? 'non-dudhwala') }}</td>
+
+                        {{-- NEW: Discount (stored on bookings table) --}}
+                        <td>
+                            @php $disc = (int)($b->discount ?? 0); @endphp
+                            {{ $disc > 0 ? '₹'.number_format($disc) : '—' }}
+                        </td>
+
+                        {{-- Amount actually charged (payment amount = net after discount) --}}
+                        <td>₹{{ number_format((float)($b->payment->amount ?? 0)) }}</td>
+
+                        <td>
+                            @if($b->payment?->id)
+                                <a href="{{ route('book.invoice', $b->payment->id) }}" class="btn-pill" aria-label="Download invoice">
+                                    Invoice
+                                </a>
+                            @else
+                                —
+                            @endif
+                        </td>
                     </tr>
-                    </thead>
-                    <tbody>
-                    @forelse($bookings as $b)
-                        <tr>
-                            <td>{{ $b->venue->name ?? '—' }}</td>
-                            <td>{{ \Carbon\Carbon::parse($b->booking_date)->format('d/m/Y') }}</td>
-                            <td>
-                                {{ \Carbon\Carbon::parse($b->timeSlot->start_time)->format('h:i A') }}
-                                to
-                                {{ \Carbon\Carbon::parse($b->timeSlot->end_time)->format('h:i A') }}
-                            </td>
-                            <td>
-                                @php $s = strtolower($b->status ?? ''); @endphp
-                                <span class="badge {{ $s==='approved' ? 'badge-success' : ($s==='pending' ? 'badge-warn' : 'badge-danger') }}">
-                                    {{ ucfirst($b->status ?? '—') }}
-                                </span>
-                            </td>
-                            <td>₹{{ number_format((float)($b->payment->amount ?? 0)) }}</td>
-                            <td>
-                                @if($b->payment?->id)
-                                    <a href="{{ route('book.invoice', $b->payment->id) }}" class="btn-pill" aria-label="Download invoice">
-                                        Invoice
-                                    </a>
-                                @else
-                                    —
-                                @endif
-                            </td>
-                        </tr>
-                    @empty
-                        <tr><td colspan="6">No bookings found</td></tr>
-                    @endforelse
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        {{-- FLASH STATUS / ERRORS --}}
-        @if (session('status'))
-            <div class="status-alert mt-4">{{ session('status') }}</div>
-        @endif
-        @if ($errors->any())
-            <div class="alert mt-4">{!! implode('<br>', $errors->all()) !!}</div>
-        @endif
-
-        {{-- PROFILE CARD --}}
-        <div class="card mt-4" style="max-width: 720px; margin: 0 auto;">
-            <div class="card-head">Update Profile</div>
-            <div class="card-body">
-                <form method="POST" action="{{ route('profile.update') }}" @submit="beforeSubmit">
-                    @csrf
-
-                    <div class="mb-3">
-                        <label class="form-label">Enter Name</label>
-                        <input class="form-control" name="first_name"
-                               value="{{ old('first_name', auth()->user()->first_name) }}" required>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Enter Surname</label>
-                        <input class="form-control" name="last_name"
-                               value="{{ old('last_name', auth()->user()->last_name) }}" required>
-                    </div>
-
-                    <div class="mb-2">
-                        <label class="form-label">Mobile Number</label>
-                        <div class="input-group">
-                            <input type="tel" maxlength="10" class="form-control" id="contact_number" name="contact_number"
-                                   x-model="phone"
-                                   value="{{ old('contact_number', auth()->user()->contact_number) }}" required>
-                            <button type="button" class="send-btn"
-                                    :disabled="sending || !canSend"
-                                    @click="sendOtp">
-                                <template x-if="!sent"><span>Send OTP</span></template>
-                                <template x-if="sent"><span>Resend (<span x-text="timer"></span>)</span></template>
-                            </button>
-                        </div>
-                        <div class="help">Changing your mobile requires OTP verification.</div>
-                        <div class="help" style="color:#b91c1c" x-text="error"></div>
-                    </div>
-
-                    <div class="mb-3" x-show="sent">
-                        <label class="form-label">Enter OTP</label>
-                        <div class="otp-boxes">
-                            <input class="otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]*"
-                                   x-model="otp[0]" @input="digitsOnly($event); focusNext($event,1)">
-                            <input class="otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]*"
-                                   x-model="otp[1]" @input="digitsOnly($event); focusNext($event,2)">
-                            <input class="otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]*"
-                                   x-model="otp[2]" @input="digitsOnly($event); focusNext($event,3)">
-                            <input class="otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]*"
-                                   x-model="otp[3]" @input="digitsOnly($event)">
-                        </div>
-                        <input type="hidden" name="otp" :value="otp.join('')">
-                    </div>
-
-                    <button class="action-primary w-100"
-                            :disabled="submitting || (phoneChanged && otp.join('').length !== 4)">
-                        <span x-show="!submitting">Update Profile</span>
-                        <span x-show="submitting">Please wait…</span>
-                    </button>
-                </form>
-            </div>
+                @empty
+                    <tr><td colspan="8">No bookings found</td></tr>
+                @endforelse
+                </tbody>
+            </table>
         </div>
     </div>
+
+    {{-- FLASH STATUS / ERRORS --}}
+    @if (session('status'))
+        <div class="status-alert mt-4">{{ session('status') }}</div>
+    @endif
+    @if ($errors->any())
+        <div class="alert mt-4">{!! implode('<br>', $errors->all()) !!}</div>
+    @endif
+
+    {{-- PROFILE CARD (unchanged) --}}
+    <div class="card mt-4" style="max-width: 720px; margin: 0 auto;">
+        <div class="card-head">Update Profile</div>
+        <div class="card-body">
+            <form method="POST" action="{{ route('profile.update') }}" @submit="beforeSubmit">
+                @csrf
+
+                <div class="mb-3">
+                    <label class="form-label">Enter Name</label>
+                    <input class="form-control" name="first_name"
+                           value="{{ old('first_name', auth()->user()->first_name) }}" required>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Enter Surname</label>
+                    <input class="form-control" name="last_name"
+                           value="{{ old('last_name', auth()->user()->last_name) }}" required>
+                </div>
+
+                <div class="mb-2">
+                    <label class="form-label">Mobile Number</label>
+                    <div class="input-group">
+                        <input type="tel" maxlength="10" class="form-control" id="contact_number" name="contact_number"
+                               x-model="phone"
+                               value="{{ old('contact_number', auth()->user()->contact_number) }}" required>
+                        <button type="button" class="send-btn"
+                                :disabled="sending || !canSend"
+                                @click="sendOtp">
+                            <template x-if="!sent"><span>Send OTP</span></template>
+                            <template x-if="sent"><span>Resend (<span x-text="timer"></span>)</span></template>
+                        </button>
+                    </div>
+                    <div class="help">Changing your mobile requires OTP verification.</div>
+                    <div class="help" style="color:#b91c1c" x-text="error"></div>
+                </div>
+
+                <div class="mb-3" x-show="sent">
+                    <label class="form-label">Enter OTP</label>
+                    <div class="otp-boxes">
+                        <input class="otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]*"
+                               x-model="otp[0]" @input="digitsOnly($event); focusNext($event,1)">
+                        <input class="otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]*"
+                               x-model="otp[1]" @input="digitsOnly($event); focusNext($event,2)">
+                        <input class="otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]*"
+                               x-model="otp[2]" @input="digitsOnly($event); focusNext($event,3)">
+                        <input class="otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]*"
+                               x-model="otp[3]" @input="digitsOnly($event)">
+                    </div>
+                    <input type="hidden" name="otp" :value="otp.join('')">
+                </div>
+
+                <button class="action-primary w-100"
+                        :disabled="submitting || (phoneChanged && otp.join('').length !== 4)">
+                    <span x-show="!submitting">Update Profile</span>
+                    <span x-show="submitting">Please wait…</span>
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
 
     {{-- Add a page class to scope layout overrides safely --}}
     <script>

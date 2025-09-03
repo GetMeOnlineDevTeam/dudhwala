@@ -8,10 +8,25 @@ use App\Models\Bookings;
 use Carbon\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\BookingsExport;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 
-
-class AdminBookingsController extends Controller
+class AdminBookingsController extends Controller implements HasMiddleware
 {
+public static function middleware(): array
+{
+    return [
+        new Middleware('auth:admin'),
+        new Middleware('role:admin,superadmin'),
+        (new Middleware('can:bookings.view'))->only('bookings'),
+        (new Middleware('can:bookings.export'))->only('export'),
+        // If you keep destroy, add permission slug 'bookings.delete' in seeder and then:
+        // (new Middleware('can:bookings.delete'))->only('destroy'),
+    ];
+}
+
+
+
     public function bookings(Request $request)
     {
         $query = Bookings::query()
@@ -19,9 +34,10 @@ class AdminBookingsController extends Controller
                 'user:id,first_name,last_name,role',
                 'venue:id,name',
                 'timeSlot:id,name',
-                'payment:id,amount'
+                // include status & method so badges/method label render without nulls
+                'payment:id,amount,status,method'
             ])
-            // Add items subtotal as items_total on each booking
+            // items subtotal as items_total
             ->withSum('items as items_total', 'total');
 
         // Search by user name or venue name
@@ -37,7 +53,7 @@ class AdminBookingsController extends Controller
             });
         }
 
-        // Optional filters (useful for Export link)
+        // Optional filters
         if ($request->filled('venue_id')) {
             $query->where('venue_id', $request->integer('venue_id'));
         }
@@ -51,13 +67,11 @@ class AdminBookingsController extends Controller
                 case 'today':
                     $query->whereDate('booking_date', \Carbon\Carbon::today());
                     break;
-
                 case 'this_week':
                     $start = \Carbon\Carbon::today()->startOfWeek();
                     $end   = \Carbon\Carbon::today()->endOfWeek();
                     $query->whereBetween('booking_date', [$start, $end]);
                     break;
-
                 case 'this_year':
                     $query->whereYear('booking_date', \Carbon\Carbon::now()->year);
                     break;
@@ -65,7 +79,7 @@ class AdminBookingsController extends Controller
         }
 
         $bookings = $query
-            ->orderBy('booking_date', 'asc')  // booking date ascending
+            ->orderBy('booking_date', 'asc')
             ->orderBy('id')
             ->paginate(10, ['*'], 'bookings_page')
             ->appends($request->only('search', 'date_filter', 'venue_id', 'status'));
@@ -73,15 +87,6 @@ class AdminBookingsController extends Controller
         return view('admin.bookings.index', compact('bookings'));
     }
 
-
-    public function destroy(Bookings $booking)
-    {
-        $booking->delete();
-
-        return redirect()
-            ->route('admin.bookings')
-            ->with('success', 'Booking #' . $booking->id . ' has been deleted.');
-    }
 
     public function export(Request $request)
     {

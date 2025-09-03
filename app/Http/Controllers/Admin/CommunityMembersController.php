@@ -8,9 +8,25 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
-
-class CommunityMembersController extends Controller
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
+class CommunityMembersController extends Controller implements HasMiddleware
 {
+public static function middleware(): array
+{
+    return [
+        new Middleware('auth:admin'),
+        new Middleware('role:admin,superadmin'),
+        (new Middleware('can:community_members.view'))->only('index'),
+        (new Middleware('can:community_members.create'))->only('create','store'),
+        (new Middleware('can:community_members.edit'))->only('edit','update'),
+        (new Middleware('can:community_members.delete'))->only('destroy'),
+        (new Middleware('can:community_members.priority'))->only('updatePriority'),
+    ];
+}
+
+
+
     public function index(Request $request)
     {
         $q = CommunityMembers::query();
@@ -100,8 +116,8 @@ class CommunityMembersController extends Controller
             }
             $member->delete();
             $rows = CommunityMembers::orderBy('priority')
-                ->orderBy('id')        
-                ->lockForUpdate()      
+                ->orderBy('id')
+                ->lockForUpdate()
                 ->get(['id', 'priority']);
 
             $expected = 1;

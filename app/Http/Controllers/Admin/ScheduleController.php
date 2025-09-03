@@ -11,18 +11,34 @@ use App\Models\VenueTimeSlot;
 use App\Models\Payment;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 
-class ScheduleController extends Controller
+class ScheduleController extends Controller implements HasMiddleware
 {
+public static function middleware(): array
+{
+    return [
+        new Middleware('auth:admin'),
+        new Middleware('role:admin,superadmin'),
+        (new Middleware('can:schedule.view'))->only('index','events','show','slots'),
+        (new Middleware('can:schedule.create'))->only('store'),
+        (new Middleware('can:schedule.edit'))->only('update'),
+        (new Middleware('can:schedule.delete'))->only('destroy'),
+    ];
+}
+
+
+
     public function index()
     {
-        $venues = VenueDetail::orderBy('name')->get(['id','name']);
-        $users  = User::where('role','user')
+        $venues = VenueDetail::orderBy('name')->get(['id', 'name']);
+        $users  = User::where('role', 'user')
             ->orderBy('first_name')
             ->orderBy('last_name')
-            ->get(['id','first_name','last_name','contact_number']);
+            ->get(['id', 'first_name', 'last_name', 'contact_number']);
 
-        return view('admin.schedule.index', compact('venues','users'));
+        return view('admin.schedule.index', compact('venues', 'users'));
     }
 
     /** FullCalendar data source */
@@ -33,7 +49,7 @@ class ScheduleController extends Controller
             'end'   => 'required|date|after_or_equal:start',
         ]);
 
-        $rows = Bookings::with(['venue','timeSlot','user'])
+        $rows = Bookings::with(['venue', 'timeSlot', 'user'])
             ->whereBetween('booking_date', [
                 Carbon::parse($request->start)->startOfDay(),
                 Carbon::parse($request->end)->endOfDay(),
@@ -45,7 +61,7 @@ class ScheduleController extends Controller
             $titleParts = [
                 $b->venue->name ?? 'Venue',
                 $b->timeSlot->name ?? 'Slot',
-                trim(($b->user->first_name ?? '').' '.($b->user->last_name ?? '')),
+                trim(($b->user->first_name ?? '') . ' ' . ($b->user->last_name ?? '')),
             ];
             return [
                 'id'    => $b->id,
@@ -120,8 +136,8 @@ class ScheduleController extends Controller
         try {
             $date  = Carbon::parse($data['date'])->toDateString();
             $slot  = VenueTimeSlot::where('id', $data['slot_id'])
-                                  ->where('venue_id', $data['venue_id'])
-                                  ->firstOrFail();
+                ->where('venue_id', $data['venue_id'])
+                ->firstOrFail();
 
             // conflict check
             $conflict = Bookings::where('venue_id', $data['venue_id'])
@@ -129,8 +145,8 @@ class ScheduleController extends Controller
                 ->where('status', '!=', 'rejected')
                 ->where(function ($q) use ($slot) {
                     $q->where('time_slot_id', $slot->id)
-                      ->orWhere('full_time', true)
-                      ->orWhere('full_venue', true);
+                        ->orWhere('full_time', true)
+                        ->orWhere('full_venue', true);
                 })
                 ->exists();
             if ($conflict) {
@@ -153,7 +169,7 @@ class ScheduleController extends Controller
                 'full_venue'   => (bool) $slot->full_venue,
                 'full_time'    => (bool) $slot->full_time,
                 'booking_date' => $date,
-                'status'       => 'approved',
+                'status'       => 'completed',
                 'payment_id'   => $payment->id,
                 'price'        => (int)$slot->price,
             ]);
@@ -169,7 +185,7 @@ class ScheduleController extends Controller
     /** Return booking JSON for edit modal */
     public function show(Bookings $booking)
     {
-        $booking->load(['venue','timeSlot','user','payment']);
+        $booking->load(['venue', 'timeSlot', 'user', 'payment']);
         return response()->json([
             'id'        => $booking->id,
             'date'      => Carbon::parse($booking->booking_date)->toDateString(),
@@ -206,8 +222,8 @@ class ScheduleController extends Controller
                 ->where('id', '!=', $booking->id)
                 ->where(function ($q) use ($slot) {
                     $q->where('time_slot_id', $slot->id)
-                      ->orWhere('full_time', true)
-                      ->orWhere('full_venue', true);
+                        ->orWhere('full_time', true)
+                        ->orWhere('full_venue', true);
                 })
                 ->exists();
             if ($conflict) {

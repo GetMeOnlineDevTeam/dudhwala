@@ -27,8 +27,9 @@ use App\Http\Controllers\Admin\MoneyBackController;
 use App\Http\Controllers\Admin\PolicyController;
 use App\Http\Controllers\Admin\BookingItemController;
 use App\Http\Controllers\Admin\ConfigurationController;
-
-
+use App\Http\Controllers\Admin\OfflineBookingController;
+use App\Http\Controllers\Admin\InvoiceController;
+use App\Http\Controllers\Admin\AdminPermissionController;
 
 // Public Routes
 Route::get('/', [HomeController::class, 'index'])->name('home');
@@ -53,7 +54,7 @@ Route::post('/razorpay/success', [RazorpayController::class, 'paymentSuccess']);
 
 
 // Authentication Routes
-Route::middleware('auth:web')->group(function () {
+Route::middleware('auth:web', 'role:user')->group(function () {
     // Profile Routes
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::post('/profile/phone/otp/send', [ProfileController::class, 'sendPhoneOtp'])
@@ -72,10 +73,43 @@ Route::prefix('admin')->name('admin.')->group(function () {
     Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
     Route::post('/login', [AuthController::class, 'login']);
 
-    Route::middleware(['auth:admin'])->group(function () {
+    Route::middleware(['auth:admin','role:admin|superadmin,admin'])->group(function () {
+        // Offline bookings UI + store
+         Route::get('/permissions/admin', [AdminPermissionController::class, 'index'])
+        ->name('permissions.admin');
+
+    Route::post('/permissions/admin', [AdminPermissionController::class, 'update'])
+        ->name('permissions.admin.update');
+        
+        Route::get('/invoices/create', [InvoiceController::class, 'create'])
+            ->name('invoices.create');
+        Route::post('/invoices', [InvoiceController::class, 'store'])
+            ->name('invoices.store');
+
+        // Existing invoice downloaders (from previous step)
+        Route::get('/payments/{payment}/invoice', [InvoiceController::class, 'payment'])
+            ->name('payments.invoice');
+        Route::get('/bookings/{booking}/invoice', [InvoiceController::class, 'booking'])
+            ->name('bookings.invoice');
+        Route::get('/offline-bookings/create', [OfflineBookingController::class, 'create'])
+            ->name('offline-bookings.create');
+        Route::post('/offline-bookings', [OfflineBookingController::class, 'store'])
+            ->name('offline-bookings.store');
+
+        // ADMIN-ONLY slots JSON (this is what the admin page should call)
+        Route::get('/offline-bookings/slots/{venue}/{date}', [OfflineBookingController::class, 'slots'])
+            ->name('offline-bookings.slots');
+
+        Route::get('/payments/{payment}/invoice', [InvoiceController::class, 'payment'])
+            ->name('payments.invoice');
+        Route::get('/bookings/{booking}/invoice', [InvoiceController::class, 'booking'])
+            ->name('bookings.invoice');
+        // routes/web.php (inside your admin group/middleware)
+        Route::get('items/suggest', [BookingItemController::class, 'suggestItems'])
+            ->name('items.suggest');
 
         Route::get('/configurations', [ConfigurationController::class, 'index'])->name('configurations.index');
-Route::put('/configurations/update', [ConfigurationController::class, 'update'])->name('configurations.update');
+        Route::put('/configurations/update', [ConfigurationController::class, 'update'])->name('configurations.update');
 
         Route::get('/dashboard', [DashboardController::class, 'dashboard'])->name('dashboard');
 

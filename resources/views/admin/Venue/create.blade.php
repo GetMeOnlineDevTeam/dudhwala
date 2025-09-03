@@ -91,7 +91,7 @@
                             </div>
                             <div class="col-12">
                                 <label class="form-label">Amenities</label>
-                                <input name="amenities" type="text" class="form-control @error('amenities') is-invalid @enderror" value="{{ old('amenities') }}">
+                                <input name="amenities" type="text" class="form-control @error('amenities') is-invalid @enderror" value="{{ old('amenities') }}" placeholder="Parking, Single Floor, Lighting, Chairs, Tables">
                                 @error('amenities')<div class="invalid-feedback">{{ $message }}</div>@enderror
                             </div>
                             <div class="col-md-6 form-check">
