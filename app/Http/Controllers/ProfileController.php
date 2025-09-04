@@ -29,7 +29,7 @@ class ProfileController extends Controller
         $bookings = Bookings::with(['payment', 'venue', 'timeSlot'])
             ->where('user_id', $request->user()->id)
             ->whereNotNull('payment_id')
-            ->latest('booking_date')
+            ->latest('created_at')
             ->get();
 
         return view('profile.edit', [

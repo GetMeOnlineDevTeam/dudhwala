@@ -192,12 +192,10 @@ public static function middleware(): array
     }
     public function updateStatus(Request $request, $id)
     {
-        $validated = $request->validate([
-            'status' => ['required', 'in:success,pending,processing'],
-        ]);
+       
 
         $moneyBack = MoneyBack::findOrFail($id);
-        $moneyBack->status = $validated['status'];
+        $moneyBack->status = $request->status;
         $moneyBack->save();
 
         return back()->with('success', 'Status updated successfully.');

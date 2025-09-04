@@ -107,7 +107,7 @@ public static function middleware(): array
             $booking->update(['items_amount' => $itemsSubtotal]);
 
             // 4) Recompute MoneyBack settlement (deposit vs items)
-            // $this->recomputeSettlement($booking->fresh('items'));
+            $this->recomputeSettlement($booking->fresh('items'));
         });
 
         $freshTotal = (float) $booking->items()->sum('total');

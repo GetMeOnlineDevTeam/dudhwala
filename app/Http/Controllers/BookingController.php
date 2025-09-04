@@ -294,18 +294,18 @@ class BookingController extends Controller
             ]);
 
             // 3) MoneyBack placeholder for deposit (discount does NOT affect deposit)
-            // if ($deposit > 0) {
-            //     MoneyBack::updateOrCreate(
-            //         ['booking_id' => $booking->id], // one row per booking
-            //         [
-            //             'user_id'  => $user->id,
-            //             'type'     => 'Pay Back',      // will flip later if items exceed deposit
-            //             'amount'   => $deposit,        // initial refundable amount
-            //             'status'   => 'pending',
-            //             'note'     => 'Auto-created at booking time for refundable deposit.',
-            //         ]
-            //     );
-            // }
+            if ($deposit > 0) {
+                MoneyBack::updateOrCreate(
+                    ['booking_id' => $booking->id], // one row per booking
+                    [
+                        'user_id'  => $user->id,
+                        'type'     => 'Pay Back',      // will flip later if items exceed deposit
+                        'amount'   => $deposit,        // initial refundable amount
+                        'status'   => 'pending',
+                        'note'     => 'Auto-created at booking time for refundable deposit.',
+                    ]
+                );
+            }
         });
 
         return redirect()
