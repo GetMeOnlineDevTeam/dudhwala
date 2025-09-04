@@ -97,7 +97,7 @@ class OtpLoginController extends Controller
             $otpRow->delete();
         });
 
-        Auth::login($user);
+        Auth::guard('web')->login($user);
 
         return redirect()->intended(route('home'));
     }
